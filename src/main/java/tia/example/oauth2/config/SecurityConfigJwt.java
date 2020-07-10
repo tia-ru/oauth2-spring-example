@@ -12,10 +12,10 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.provisioning.UserDetailsManager;
 import tia.example.oauth2.security.CmjJwtAuthenticationConverter;
 import tia.example.oauth2.security.SessionAwareBearerTokenResolver;
 
-@Configuration
 @EnableWebSecurity(debug = true)
 public class SecurityConfigJwt extends WebSecurityConfigurerAdapter {
 
@@ -48,11 +48,4 @@ public class SecurityConfigJwt extends WebSecurityConfigurerAdapter {
         )
         ;
     }
-
-    /*@Bean
-    JwtDecoder jwtDecoder() {
-        return JwtDecoders.fromIssuerLocation(issuerUri);
-        //return NimbusJwtDecoder.withJwkSetUri(this.jwkSetUri).build();
-    }*/
-
 }

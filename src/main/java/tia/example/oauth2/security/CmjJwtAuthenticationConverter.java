@@ -8,16 +8,26 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.oidc.StandardClaimNames;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.BearerTokenError;
+import org.springframework.security.oauth2.server.resource.BearerTokenErrors;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.util.Assert;
 
 import java.util.Collection;
+import java.util.Map;
 
 /**
- * Конвертер {@link Jwt} в {@link CmjJwtAuthenticationToken}
+ * Конвертер {@link Jwt} в {@link CmjBearerTokenAuthentication}.
+ * Выполняется поиск пользователя в СО и проверка возможности входа в систему.<p/>
+ * В качестве идентификатора пользователя используется {@link Jwt#getSubject()}.
+ * Если пользователь не неайден, выполняется поиск по e-mail ({@link StandardClaimNames#EMAIL}).
+ * Если найден по e-mail, то в карточку "Персона СО" записывается {@link Jwt#getSubject()} в таблицу альтернативных
+ * идентификаторов.
+ *
  * @since Spring Security 5.1
  */
 public class CmjJwtAuthenticationConverter implements Converter<Jwt, AbstractAuthenticationToken> {
@@ -27,43 +37,70 @@ public class CmjJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
 
     private final UserDetailsService userDetailsService;
 
-    public CmjJwtAuthenticationConverter(@NonNull UserDetailsService userDetailsService){
+    public CmjJwtAuthenticationConverter(@NonNull UserDetailsService userDetailsService) {
         Assert.notNull(userDetailsService, "userDetailsService cannot be null");
         this.userDetailsService = userDetailsService;
     }
+
     @Override
     public final AbstractAuthenticationToken convert(Jwt jwt) {
-        String user = jwt.getClaimAsString(StandardClaimNames.PREFERRED_USERNAME); // TODO use jwt.getSubject()
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication instanceof CmjJwtAuthenticationToken) {
-            CmjJwtAuthenticationToken tokenAuthentication = (CmjJwtAuthenticationToken) authentication;
-            if (tokenAuthentication.getName().equals(user)){
+        if (authentication instanceof CmjBearerTokenAuthentication) {
+            CmjBearerTokenAuthentication tokenAuthentication = (CmjBearerTokenAuthentication) authentication;
+            //Сменил ли пользователь учётку.
+            if (tokenAuthentication.getName().equals(jwt.getSubject())) {
                 // Пользователь был сохранён в http-сесии. Не требуется повторная загрузка информации о нём из СО и доп.проверки
-                if (jwt.equals(tokenAuthentication.getToken())){
+                OAuth2AccessToken accessToken = new OAuth2AccessToken(
+                        OAuth2AccessToken.TokenType.BEARER, jwt.getTokenValue(), jwt.getIssuedAt(), jwt.getExpiresAt());
+
+                if (accessToken.equals(tokenAuthentication.getToken())) {
                     //Токен прежний, не обновлённый
                     return tokenAuthentication;
                 } else {
-                    //Токен обновлён.
-                    Collection<GrantedAuthority> authorities = extractAuthorities(jwt);
-                    return new CmjJwtAuthenticationToken(jwt, tokenAuthentication.getPrincipal(), authorities);
+                    //Токен пользователя обновлён. Сохраняем его.
+                    CmUserDetailsLTPA principal = (CmUserDetailsLTPA) tokenAuthentication.getPrincipal();
+                    return createAuthenticationToken(jwt, principal.getNotesName(), principal.getLtpaToken());
                 }
             }
         }
-        Collection<GrantedAuthority> authorities = extractAuthorities(jwt);
-        UserDetails userDetails = userDetailsService.loadUserByUsername(user);
-        if (userDetails == null){
-            String email = jwt.getClaimAsString(StandardClaimNames.EMAIL_VERIFIED);
+        return onFirstLogin(jwt);
+    }
+
+    protected AbstractAuthenticationToken onFirstLogin(Jwt jwt) {
+
+        // TODO use jwt.getSubject()
+        String userId = jwt.getClaimAsString(StandardClaimNames.PREFERRED_USERNAME);
+
+        UserDetails userDetails = userDetailsService.loadUserByUsername(userId);
+        Boolean isVerified = jwt.getClaimAsBoolean(StandardClaimNames.EMAIL_VERIFIED);
+        if (userDetails == null && Boolean.TRUE.equals(isVerified)) {
+            String email = jwt.getClaimAsString(StandardClaimNames.EMAIL);
             // TODO реализовать
             //userDetails = userDetailsService.loadUserByEMail(email);
-            if (userDetails == null){
-                throw new UsernameNotFoundException(user);
+            if (userDetails != null) {
+                // TODO реализовать
+                //userDetailsService.saveOauth2UserId(jwt.getSubject(), userDetails);
             }
-            // TODO реализовать
-            //userDetailsService.saveOauth2UserId(jwt.getSubject(), userDetails);
         }
-        CmUserDetailsLTPA cmUserDetails = new CmUserDetailsLTPA(userDetails.getUsername(),"", authorities);
-        return new CmjJwtAuthenticationToken(jwt, cmUserDetails, authorities);
+        if (userDetails == null) {
+            BearerTokenError error = BearerTokenErrors.invalidRequest("User is not found");
+            throw new OAuth2AuthenticationException(error);
+        }
+        String ltpaToken = null;
+        // TODO реализовать
+        //ltpaToken = ltpaService.generateLtpaToken(userDetails.getUsername());
+
+        return createAuthenticationToken(jwt, userDetails.getUsername(), ltpaToken);
+    }
+
+    private AbstractAuthenticationToken createAuthenticationToken(Jwt jwt, String notesName, String ltpaToken) {
+        OAuth2AccessToken accessToken = new OAuth2AccessToken(
+                OAuth2AccessToken.TokenType.BEARER, jwt.getTokenValue(), jwt.getIssuedAt(), jwt.getExpiresAt());
+        Collection<GrantedAuthority> authorities = extractAuthorities(jwt);
+        Map<String, Object> attributes = jwt.getClaims();
+        CmUserDetailsLTPA principal = new CmUserDetailsLTPA(jwt.getSubject(), notesName, ltpaToken, attributes, authorities);
+        return new CmjBearerTokenAuthentication(principal, accessToken);
     }
 
     /**
@@ -71,11 +108,9 @@ public class CmjJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
      *
      * @param jwt The token
      * @return The collection of {@link GrantedAuthority}s found on the token
-     * @deprecated Since 5.2. Use your own custom converter instead
      * @see JwtGrantedAuthoritiesConverter
      * @see #setJwtGrantedAuthoritiesConverter(Converter)
      */
-    @Deprecated
     protected Collection<GrantedAuthority> extractAuthorities(Jwt jwt) {
         return this.jwtGrantedAuthoritiesConverter.convert(jwt);
     }
@@ -85,11 +120,12 @@ public class CmjJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
      * Defaults to {@link JwtGrantedAuthoritiesConverter}.
      *
      * @param jwtGrantedAuthoritiesConverter The converter
-     * @since 5.2
      * @see JwtGrantedAuthoritiesConverter
+     * @since 5.2
      */
     public void setJwtGrantedAuthoritiesConverter(Converter<Jwt, Collection<GrantedAuthority>> jwtGrantedAuthoritiesConverter) {
         Assert.notNull(jwtGrantedAuthoritiesConverter, "jwtGrantedAuthoritiesConverter cannot be null");
         this.jwtGrantedAuthoritiesConverter = jwtGrantedAuthoritiesConverter;
     }
+
 }

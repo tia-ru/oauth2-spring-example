@@ -1,2 +1,19 @@
 # Project exclude paths
-/target/
+
+# Eclipse
+/.classpath
+/.project
+/.settings
+
+# Idea
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Maven
+target/
+*.releaseBackup
+*.tag
+release.properties
+pom.xml.next

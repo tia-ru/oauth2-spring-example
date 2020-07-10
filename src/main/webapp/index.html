@@ -24,7 +24,7 @@
 <body>
 
 <div>
-    <button onclick="keycloak.login()">Login</button>
+    <button onclick="keycloak.login({ scope: 'cmj'})">Login</button>
     <button onclick="keycloak.login({ action: 'UPDATE_PASSWORD' })">Update Password</button>
     <button onclick="keycloak.logout()">Logout</button>
     <button onclick="keycloak.register()">Register</button>

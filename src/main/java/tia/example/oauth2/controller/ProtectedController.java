@@ -14,9 +14,8 @@ public class ProtectedController {
 
     @GetMapping("/resource")
     @ResponseBody
-    public String getResource(@AuthenticationPrincipal CmUserDetailsLTPA pricipal){
-        String user = pricipal.getUsername();
-
+    public String getResource(@AuthenticationPrincipal CmUserDetailsLTPA principal){
+        String user = principal.getName();
         return "{\n" +
                 "  \"Name\": \"" + user +"\",\n" +
                 "  \"Age\": 20\n" +
