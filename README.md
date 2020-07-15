@@ -1,6 +1,6 @@
 Прототип Oidc аутентификации в CMJ на примере Keycloak.
 1. Установите и запустите Keycloak. Должен работать на порте 8080 (по умолчанию).
-2. Импортируйте в Keycloak реалм example-realm.json
+2. Импортируйте в Keycloak реалм из файла `demo-realm.json`
 3. Запустите данное приложение в web-сервере (WildFly, Tomcat).
 4. Web-сервер должен работать на порте 8081.
 5. Откройте в браузере http://localhost:8081/oauth2-spring-example-1.0-SNAPSHOT/index.html
