@@ -1,23 +1,19 @@
 package tia.example.oauth2.config;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
-import org.springframework.context.annotation.PropertySource;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.core.userdetails.UserDetailsByNameServiceWrapper;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationProvider;
+import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
 import org.springframework.security.web.authentication.preauth.RequestHeaderAuthenticationFilter;
-import tia.example.oauth2.security.CmjJwtAuthenticationConverter;
-import tia.example.oauth2.security.SessionAwareBearerTokenResolver;
 
-@Profile("custHeader")
+@Profile(CmjSpringProfiles.AUTHN_HEADER)
 @Configuration
 @EnableWebSecurity(debug = true)
 public class SecurityConfigCustomHeader extends WebSecurityConfigurerAdapter {
@@ -51,7 +47,7 @@ public class SecurityConfigCustomHeader extends WebSecurityConfigurerAdapter {
 
     @Bean
     PreAuthenticatedAuthenticationProvider authenticationProvider(){
-        UserDetailsByNameServiceWrapper wrapper = new UserDetailsByNameServiceWrapper();
+        UserDetailsByNameServiceWrapper<PreAuthenticatedAuthenticationToken> wrapper = new UserDetailsByNameServiceWrapper<>();
         wrapper.setUserDetailsService(super.userDetailsService());
 
         PreAuthenticatedAuthenticationProvider provider = new PreAuthenticatedAuthenticationProvider();
