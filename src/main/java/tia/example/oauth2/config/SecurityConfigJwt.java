@@ -21,10 +21,20 @@ public class SecurityConfigJwt extends WebSecurityConfigurerAdapter {
     @Autowired
     public void configureGlobal(AuthenticationManagerBuilder auth) throws Exception {
         auth.inMemoryAuthentication()
-                .withUser("user").password("password").roles("USER")
-                .and()
-                .withUser("z1").password("1").roles("USER")
-                .and()
+                .withUser("user").password("password").roles("USER").and()
+                .withUser("z1").password("1").roles("USER").and()
+                .withUser("user11").password("").roles("USER").and()
+                .withUser("user11 test").password("").roles("USER").and()
+                .withUser("user12").password("").roles("USER").and()
+                .withUser("user13").password("").roles("USER").and()
+                .withUser("user14").password("").roles("USER").and()
+                .withUser("user21").password("").roles("USER").and()
+                .withUser("user21 test").password("").roles("USER").and()
+                .withUser("user22").password("").roles("USER").and()
+                .withUser("user22 test").password("").roles("USER").and()
+                .withUser("user23").password("").roles("USER").and()
+                .withUser("user24").password("").roles("USER").and()
+                .withUser("hnelson").password("").roles("USER").and()
                 .withUser("admin").password("password").roles("USER", "ADMIN");
     }
 
