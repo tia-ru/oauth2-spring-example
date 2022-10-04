@@ -10,7 +10,7 @@ import tia.example.oauth2.controller.ProtectedController;
 
 @Configuration
 @EnableWebMvc
-@ComponentScan(basePackageClasses = {SecurityConfigJwt.class, ProtectedController.class})
+@ComponentScan(basePackageClasses = {WebMvcConfig.class, ProtectedController.class})
 @PropertySource("classpath://server.properties")
 public class WebMvcConfig implements WebMvcConfigurer {
 

@@ -865,7 +865,7 @@
 	                ifrm.setAttribute("src", src);
 	                ifrm.setAttribute("title", "keycloak-silent-check-sso");
 	                ifrm.style.display = "none";
-	                document.body.appendChild(ifrm);
+
 
 	                var messageCallback = function(event) {
 	                    if (event.origin !== window.location.origin || ifrm.contentWindow !== event.source) {
@@ -880,6 +880,9 @@
 	                };
 
 	                window.addEventListener("message", messageCallback);
+//TIA==
+// move here
+					document.body.appendChild(ifrm);
 	            };
 
 	            var options = {};
@@ -1132,7 +1135,11 @@
 	    kc.createLogoutUrl = function(options) {
 	        var url = kc.endpoints.logout()
 	            + '?redirect_uri=' + encodeURIComponent(adapter.redirectUri(options, false));
-
+// TIA ==========
+	        if (kc.idToken) {
+			    url = url + "&id_token_hint=" + encodeURIComponent(kc.idToken)
+		 	}
+// TIA ==========
 	        return url;
 	    };
 
@@ -1633,15 +1640,18 @@
 	        if (token) {
 	            kc.token = token;
 	            kc.tokenParsed = decodeToken(token);
-	            kc.sessionId = kc.tokenParsed.session_state;
 	            kc.authenticated = true;
-	            kc.subject = kc.tokenParsed.sub;
-	            kc.realmAccess = kc.tokenParsed.realm_access;
-	            kc.resourceAccess = kc.tokenParsed.resource_access;
-
-	            if (timeLocal) {
-	                kc.timeSkew = Math.floor(timeLocal / 1000) - kc.tokenParsed.iat;
-	            }
+//TIA============
+				if(kc.tokenParsed) {
+//===============
+					kc.sessionId = kc.tokenParsed.session_state;
+					kc.subject = kc.tokenParsed.sub;
+					kc.realmAccess = kc.tokenParsed.realm_access;
+					kc.resourceAccess = kc.tokenParsed.resource_access;
+					if (timeLocal) {
+						kc.timeSkew = Math.floor(timeLocal / 1000) - kc.tokenParsed.iat;
+					}
+				}
 
 	            if (kc.timeSkew != null) {
 	                logInfo('[KEYCLOAK] Estimated time difference between browser and server is ' + kc.timeSkew + ' seconds');
@@ -1669,7 +1679,9 @@
 
 	    function decodeToken(str) {
 	        str = str.split('.')[1];
-
+// TIA ====
+			if (!str) return null;
+//=========
 	        str = str.replace(/-/g, '+');
 	        str = str.replace(/_/g, '/');
 	        switch (str.length % 4) {
@@ -1947,8 +1959,9 @@
 
 	    function check3pCookiesSupported() {
 	        var promise = createPromise();
-
-	        if (loginIframe.enable || kc.silentCheckSsoRedirectUri) {
+// TIA =======
+// add && kc.endpoints.thirdPartyCookiesIframe)
+	        if ((loginIframe.enable || kc.silentCheckSsoRedirectUri) && kc.endpoints.thirdPartyCookiesIframe) {
 	            var iframe = document.createElement('iframe');
 	            iframe.setAttribute('src', kc.endpoints.thirdPartyCookiesIframe());
 	            iframe.setAttribute('title', 'keycloak-3p-check-iframe' );

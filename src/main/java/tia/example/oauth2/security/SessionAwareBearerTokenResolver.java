@@ -1,5 +1,9 @@
 package tia.example.oauth2.security;
 
+import javax.servlet.http.HttpServletRequest;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -10,10 +14,6 @@ import org.springframework.security.oauth2.server.resource.BearerTokenError;
 import org.springframework.security.oauth2.server.resource.authentication.AbstractOAuth2TokenAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.util.StringUtils;
-
-import javax.servlet.http.HttpServletRequest;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.springframework.security.oauth2.server.resource.BearerTokenErrors.invalidRequest;
 import static org.springframework.security.oauth2.server.resource.BearerTokenErrors.invalidToken;
@@ -42,26 +42,35 @@ public class SessionAwareBearerTokenResolver implements BearerTokenResolver {
      */
     @Override
     public String resolve(HttpServletRequest request) {
+
         String authorizationHeaderToken = resolveFromAuthorizationHeader(request);
         String parameterToken = resolveFromRequestParameters(request);
         String tokenValue = null;
+
         if (authorizationHeaderToken != null) {
             if (parameterToken != null) {
                 BearerTokenError error = invalidRequest("Found multiple bearer tokens in the request");
                 throw new OAuth2AuthenticationException(error);
             }
             tokenValue = authorizationHeaderToken;
-        }
-        else if (parameterToken != null && isParameterTokenSupportedForRequest(request)) {
-            tokenValue = parameterToken;
-        } else {
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication instanceof AbstractOAuth2TokenAuthenticationToken){
-                AbstractOAuth2TokenAuthenticationToken tokenAuthentication = (AbstractOAuth2TokenAuthenticationToken) authentication;
-                AbstractOAuth2Token token = tokenAuthentication.getToken();
-                tokenValue = token.getTokenValue();
-            }
 
+        } else if (parameterToken != null && isParameterTokenSupportedForRequest(request)) {
+
+            tokenValue = parameterToken;
+
+        } else {
+
+            Authentication storedAuthentication = SecurityContextHolder.getContext().getAuthentication();
+            if (storedAuthentication instanceof AbstractOAuth2TokenAuthenticationToken) {
+
+                AbstractOAuth2TokenAuthenticationToken<? extends AbstractOAuth2Token> tokenAuthentication =
+                        (AbstractOAuth2TokenAuthenticationToken<? extends AbstractOAuth2Token>) storedAuthentication;
+
+                AbstractOAuth2Token token = tokenAuthentication.getToken();
+                if (token != null) {
+                    tokenValue = token.getTokenValue();
+                }
+            }
         }
         return tokenValue;
     }

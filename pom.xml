@@ -10,8 +10,8 @@
     <packaging>jar</packaging>
 
     <properties>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Версия, используемая в CMJ -->
         <!--<spring.version>5.1.5.RELEASE</spring.version>-->
@@ -33,22 +33,11 @@
 
             <dependency>
                 <groupId>org.springframework.security</groupId>
-                <artifactId>spring-security-config</artifactId>
+                <artifactId>spring-security-bom</artifactId>
                 <version>${spring.security.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
-
-            <dependency>
-                <groupId>org.springframework.security</groupId>
-                <artifactId>spring-security-oauth2-resource-server</artifactId>
-                <version>${spring.security.version}</version>
-            </dependency>
-
-            <dependency>
-                <groupId>org.springframework.security</groupId>
-                <artifactId>spring-security-oauth2-jose</artifactId>
-                <version>${spring.security.version}</version>
-            </dependency>
-
         </dependencies>
     </dependencyManagement>
 
@@ -74,17 +63,24 @@
             <artifactId>spring-security-oauth2-jose</artifactId>
         </dependency>
 
+
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-oauth2-client</artifactId>
         </dependency>
 
-
-        <!--<dependency>
+        <dependency>
             <groupId>com.nimbusds</groupId>
             <artifactId>oauth2-oidc-sdk</artifactId>
-            <version>8.9</version>
-        </dependency>-->
+            <!--В spring-security-oauth2-resource-server 5.3.3 задекларирована минимальная 7.5-->
+            <version>9.43.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.10.4</version>
+        </dependency>
 
         <dependency>
             <groupId>javax.servlet</groupId>
@@ -100,6 +96,11 @@
             <version>${tomcat.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j18-impl</artifactId>
+            <version>2.17.0</version>
+        </dependency>
 
       <!--  <dependency>
             <groupId>org.apache.logging.log4j</groupId>
@@ -111,6 +112,14 @@
             <artifactId>log4j-core</artifactId>
             <version>2.13.3</version>
         </dependency>-->
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <build>

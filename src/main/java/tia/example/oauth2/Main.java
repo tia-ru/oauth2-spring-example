@@ -1,13 +1,5 @@
 package tia.example.oauth2;
 
-import org.apache.catalina.Context;
-import org.apache.catalina.WebResourceRoot;
-import org.apache.catalina.WebResourceSet;
-import org.apache.catalina.startup.Tomcat;
-import org.apache.catalina.webresources.DirResourceSet;
-import org.apache.catalina.webresources.JarResourceSet;
-import org.apache.catalina.webresources.StandardRoot;
-
 import java.io.File;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -20,13 +12,22 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
+import org.apache.catalina.Context;
+import org.apache.catalina.WebResourceRoot;
+import org.apache.catalina.WebResourceSet;
+import org.apache.catalina.startup.Tomcat;
+import org.apache.catalina.webresources.DirResourceSet;
+import org.apache.catalina.webresources.JarResourceSet;
+import org.apache.catalina.webresources.StandardRoot;
+
 public class Main {
 
     private static final String WEBAPP_DIR_LOCATION = "src/main/webapp/";
     private static final String WEB_APP_NAME = "oidc-cmj-web";
+    public static final String DEFAULT_PORT = "8082";
 
     public static void main(String[] args) throws Exception {
-
+        
         Logger logger = Logger.getLogger("");
         //logger.setLevel(Level.FINE);
 
@@ -44,7 +45,7 @@ public class Main {
 
         //The port that we should run on can be set into an environment variable
         //Look for that variable and default to 8081 if it isn't there.
-        String webPort = Optional.ofNullable(System.getenv("PORT")).orElse("8081");
+        String webPort = Optional.ofNullable(System.getenv("PORT")).orElse(DEFAULT_PORT);
         tomcat.setPort(Integer.parseInt(webPort));
         //ctx.setAddWebinfClassesResources(true); // process /META-INF/resources for static
 
@@ -120,7 +121,7 @@ public class Main {
             if (lastIndexOf < 0) {
                 root = new File("");
             } else {
-                root = new File(runningJarPath.substring(0, lastIndexOf) + "/target");
+                root = new File(runningJarPath.substring(0, lastIndexOf));
             }
             System.out.println("application resolved root folder: " + root.getAbsolutePath());
             return root;

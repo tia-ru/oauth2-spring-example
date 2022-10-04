@@ -1,8 +1,10 @@
 package tia.example.oauth2.security;
 
+import java.util.Collection;
+import java.util.Map;
+
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.lang.NonNull;
-import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -14,11 +16,9 @@ import org.springframework.security.oauth2.core.oidc.StandardClaimNames;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.BearerTokenError;
 import org.springframework.security.oauth2.server.resource.BearerTokenErrors;
+import org.springframework.security.oauth2.server.resource.authentication.AbstractOAuth2TokenAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.util.Assert;
-
-import java.util.Collection;
-import java.util.Map;
 
 /**
  * Конвертер {@link Jwt} в {@link CmjBearerTokenAuthentication}.
@@ -30,7 +30,7 @@ import java.util.Map;
  *
  * @since Spring Security 5.1
  */
-public class CmjJwtAuthenticationConverter implements Converter<Jwt, AbstractAuthenticationToken> {
+public class CmjJwtAuthenticationConverter implements Converter<Jwt, AbstractOAuth2TokenAuthenticationToken> {
 
     private Converter<Jwt, Collection<GrantedAuthority>> jwtGrantedAuthoritiesConverter
             = new JwtGrantedAuthoritiesConverter();
@@ -43,14 +43,14 @@ public class CmjJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
     }
 
     @Override
-    public final AbstractAuthenticationToken convert(Jwt jwt) {
+    public final AbstractOAuth2TokenAuthenticationToken convert(Jwt jwt) {
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication instanceof CmjBearerTokenAuthentication) {
             CmjBearerTokenAuthentication tokenAuthentication = (CmjBearerTokenAuthentication) authentication;
             //Сменил ли пользователь учётку.
             if (tokenAuthentication.getName().equals(jwt.getSubject())) {
-                // Пользователь был сохранён в http-сесии. Не требуется повторная загрузка информации о нём из СО и доп.проверки
+                // Пользователь был сохранён в http-сессии. Не требуется повторная загрузка информации о нём из СО и доп.проверки
                 OAuth2AccessToken accessToken = new OAuth2AccessToken(
                         OAuth2AccessToken.TokenType.BEARER, jwt.getTokenValue(), jwt.getIssuedAt(), jwt.getExpiresAt());
 
@@ -67,7 +67,7 @@ public class CmjJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
         return onFirstLogin(jwt);
     }
 
-    protected AbstractAuthenticationToken onFirstLogin(Jwt jwt) {
+    protected AbstractOAuth2TokenAuthenticationToken onFirstLogin(Jwt jwt) {
 
         // TODO use jwt.getSubject()
         String userId = jwt.getClaimAsString(StandardClaimNames.PREFERRED_USERNAME);
@@ -94,7 +94,7 @@ public class CmjJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
         return createAuthenticationToken(jwt, userDetails.getUsername(), ltpaToken);
     }
 
-    private AbstractAuthenticationToken createAuthenticationToken(Jwt jwt, String notesName, String ltpaToken) {
+    private AbstractOAuth2TokenAuthenticationToken createAuthenticationToken(Jwt jwt, String notesName, String ltpaToken) {
         OAuth2AccessToken accessToken = new OAuth2AccessToken(
                 OAuth2AccessToken.TokenType.BEARER, jwt.getTokenValue(), jwt.getIssuedAt(), jwt.getExpiresAt());
         Collection<GrantedAuthority> authorities = extractAuthorities(jwt);
