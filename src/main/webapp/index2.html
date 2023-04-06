@@ -1,0 +1,225 @@
+
+<html>
+<head>
+
+    <!--<script src= "https://raw.githubusercontent.com/IdentityModel/oidc-client-js/dev/dist/oidc-client.js"></script>-->
+    <script src="script/oidc-client.js"></script>
+
+</head>
+<body>
+<h2>OIDC-CLIENT</h2>
+<div>
+    <button onclick="authService.signinRedirect()">Login</button>
+    <button onclick="keycloak.login({scope: 'offline_access'})">Login for offline</button>
+    <button onclick="keycloak.login({ prompt: 'none'})">Login no prompt</button>
+    <button onclick="keycloak.login({ action: 'UPDATE_PASSWORD' })">Update Password</button>
+    <button onclick="keycloak.logout()">Logout</button>
+    <button onclick="keycloak.register()">Register</button>
+    <button onclick="keycloak.accountManagement()">Account</button>
+    <button onclick="openSignInWindow('http://ya.ru', 'w1')">Popup</button>
+    <button onclick="refreshToken(9999)">Refresh Token</button>
+    <button onclick="refreshToken(30)">Refresh Token (if <30s validity)</button>
+    <button onclick="loadProfile()">Get Profile</button>
+    <button onclick="updateProfile()">Update profile</button>
+    <button onclick="loadUserInfo()">Get User Info</button>
+    <button onclick="output(keycloak.tokenParsed)">Show Token</button>
+    <button onclick="output(keycloak.refreshTokenParsed)">Show Refresh Token</button>
+    <button onclick="output(keycloak.idTokenParsed)">Show ID Token</button>
+    <button onclick="showExpires()">Show Expires</button>
+    <button onclick="output(keycloak)">Show Details</button>
+    <button onclick="output(keycloak.createLoginUrl())">Show Login URL</button>
+    <button onclick="output(keycloak.createLogoutUrl())">Show Logout URL</button>
+    <button onclick="output(keycloak.createRegisterUrl())">Show Register URL</button>
+    <button onclick="output(keycloak.createAccountUrl())">Show Account URL</button>
+    <button onclick="showOpenidConfiguration()">Show OIDC Configuration</button>
+    <button onclick="protectedResource()">Protected resource</button>
+    <br/>
+    <input type="text"/>
+</div>
+
+<h2>Result</h2>
+<pre style="background-color: #ddd; border: 1px solid #ccc; padding: 10px; word-wrap: break-word; white-space: pre-wrap;" id="output"></pre>
+
+<h2>Events</h2>
+<pre style="background-color: #ddd; border: 1px solid #ccc; padding: 10px; word-wrap: break-word; white-space: pre-wrap;" id="events"></pre>
+
+
+<script>
+    function loadProfile() {
+        keycloak.loadUserProfile().then(function(profile) {
+            output(profile);
+        }).catch(function() {
+            output('Failed to load profile');
+        });
+    }
+
+    function updateProfile() {
+        var url = keycloak.createAccountUrl().split('?')[0];
+        var req = new XMLHttpRequest();
+        req.open('POST', url, true);
+        req.setRequestHeader('Accept', 'application/json');
+        req.setRequestHeader('Content-Type', 'application/json');
+        req.setRequestHeader('Authorization', 'bearer ' + keycloak.token);
+
+        req.onreadystatechange = function () {
+            if (req.readyState == 4) {
+                if (req.status == 200) {
+                    output('Success');
+                } else {
+                    output('Failed');
+                }
+            }
+        }
+
+        req.send('{"email":"myemail@foo.bar","firstName":"test","lastName":"bar"}');
+    }
+
+    function loadUserInfo() {
+        keycloak.loadUserInfo().then(function(userInfo) {
+            output(userInfo);
+        }).catch(function() {
+            output('Failed to load user info');
+        });
+    }
+
+    function refreshToken(minValidity) {
+        keycloak.updateToken(minValidity).then(function(refreshed) {
+            if (refreshed) {
+                output(keycloak.tokenParsed);
+            } else {
+                output('Token not refreshed, valid for ' + Math.round(keycloak.tokenParsed.exp + keycloak.timeSkew - new Date().getTime() / 1000) + ' seconds');
+            }
+        }).catch(function() {
+            output('Failed to refresh token');
+        });
+    }
+
+    function showExpires() {
+        if (!keycloak.tokenParsed) {
+            output("Not authenticated");
+            return;
+        }
+
+        var o = 'Token Expires:\t\t' + new Date((keycloak.tokenParsed.exp + keycloak.timeSkew) * 1000).toLocaleString() + '\n';
+        o += 'Token Expires in:\t' + Math.round(keycloak.tokenParsed.exp + keycloak.timeSkew - new Date().getTime() / 1000) + ' seconds\n';
+
+        if (keycloak.refreshTokenParsed) {
+            o += 'Refresh Token Expires:\t' + new Date((keycloak.refreshTokenParsed.exp + keycloak.timeSkew) * 1000).toLocaleString() + '\n';
+            o += 'Refresh Expires in:\t' + Math.round(keycloak.refreshTokenParsed.exp + keycloak.timeSkew - new Date().getTime() / 1000) + ' seconds';
+        }
+
+        output(o);
+    }
+
+    function output(data) {
+        if (typeof data === 'object') {
+            data = JSON.stringify(data, null, '  ');
+        }
+        document.getElementById('output').innerHTML = data;
+    }
+
+    function event(event) {
+        var e = document.getElementById('events').innerHTML;
+        document.getElementById('events').innerHTML = new Date().toLocaleString() + "\t" + event + "\n" + e;
+    }
+
+    function showOpenidConfiguration(){
+        var url = keycloak.authServerUrl + 'realms/' +  keycloak.realm + "/.well-known/openid-configuration";
+        var req = new XMLHttpRequest();
+        req.open('GET', url, true);
+        req.setRequestHeader('Accept', 'application/json');
+
+        req.onreadystatechange = function () {
+            if (req.readyState == 4) {
+                if (req.status == 200) {
+                    output(JSON.parse(req.responseText));
+                } else {
+                    output('Failed');
+                }
+            }
+        }
+        req.send();
+    }
+
+    var isSendToken = true;
+    function protectedResource() {
+        var url = 'api/resource';
+        var req = new XMLHttpRequest();
+        req.open('GET', url, true);
+        req.setRequestHeader('Accept', 'application/json');
+        req.setRequestHeader('Content-Type', 'application/json');
+        if (isSendToken && typeof keycloak.token != 'undefined'){
+            var t = keycloak.token.toString();
+            req.setRequestHeader('Authorization', 'Bearer ' + t);
+        }
+        req.setRequestHeader('Cache-Control', 'no-cache');
+
+        req.onreadystatechange = function () {
+            if (req.readyState == 4) {
+                if (req.status == 200) {
+                    isSendToken = false;
+                    output(req.response)
+                } else if (req.status == 401 && req.getResponseHeader("WWW-Authenticate").substring(0, 6) == 'Bearer') {
+                    isSendToken = true;
+                    //keycloak.login();
+                } else {
+                    isSendToken = true;
+                    output('Failed');
+                }
+            }
+        }
+        req.send();
+    }
+
+    let windowObjectReference = null;
+    let previousUrl = null;
+
+    function openSignInWindow (url, name) {
+        // remove any existing event listeners
+        //window.removeEventListener('message', receiveMessage);
+
+        // window features
+        const strWindowFeatures =
+            'toolbar=no, menubar=no, width=600, height=700, top=100, left=100';
+
+        if (windowObjectReference === null || windowObjectReference.closed) {
+            /* if the pointer to the window object in memory does not exist
+             or if such pointer exists but the window was closed */
+            windowObjectReference = window.open(url, name, strWindowFeatures);
+        } else if (previousUrl !== url) {
+            /* if the resource to load is different,
+             then we load it in the already opened secondary window and then
+             we bring such window back on top/in front of its parent window. */
+            windowObjectReference = window.open(url, name, strWindowFeatures);
+            windowObjectReference.focus();
+        } else {
+            /* else the window reference must exist and the window
+             is not closed; therefore, we can bring it back on top of any other
+             window with the focus() method. There would be no need to re-create
+             the window or to reload the referenced resource. */
+            windowObjectReference.focus();
+        }
+
+        // add the listener for receiving a message from the popup
+        //window.addEventListener('message', event => receiveMessage(event), false);
+        // assign the previous URL
+        previousUrl = url;
+    };
+    var oidc = {
+        client_id: 'cmj-web',
+        filterProtocolClaims: true,
+        //issuer: 'http://localhost:8080/auth/realms/Demo',
+        authority :'http://localhost:8080/auth/realms/Demo',
+        loadUserInfo: true,
+        postLogoutRedirectUri: 'http://localhost:4200/',
+        redirect_uri: window.location.href,
+        response_type: 'code',
+        scope: 'openid profile email'
+    }
+
+    var authService = new Oidc.UserManager(oidc);
+
+
+</script>
+</body>
+</html>

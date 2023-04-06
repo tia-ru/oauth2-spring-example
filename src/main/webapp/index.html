@@ -27,11 +27,11 @@
 <h2>KEYCLOAK JS-ADAPTER</h2>
 <div id="main" hidden="true">
     <button onclick="keycloak.login()">Login</button>
-    <button onclick="keycloak.login({scope: 'offline_access'})">Login for offline</button>
+    <button onclick="keycloak.login({scope: 'profile', loginHint:'cmj-test1'})">Login+Scopes</button>
     <button onclick="keycloak.login({ prompt: 'none'})">Login no prompt</button>
     <button onclick="refreshToken(30)">Refresh Token (if &lt;30s validity)</button>
     <button onclick="refreshToken(9999)">Refresh Token</button>
-    <button onclick="keycloak.logout()">Logout</button>
+    <button onclick="keycloak.logout(); output('Logout done')">Logout</button>
     <div id="info">
         <button onclick="keycloak.login({ action: 'UPDATE_PASSWORD' })">Update Password</button>
         <button onclick="keycloak.register()">Register</button>
@@ -54,7 +54,7 @@
         <button onclick="showOpenidConfiguration()">Show OIDC Configuration</button>
     </div>
     <div id="cmj">
-        <button onclick="protectedResource()">Protected resource</button>
+        <button onclick="protectedResource()">Protected resource:</button> <input id="protected-url" type="url">
     </div>
     <br/>
 </div>
@@ -203,7 +203,14 @@
     var isSendToken = true;
 
     function protectedResource() {
-        var url = 'api/resource';
+
+        var urlField = document.getElementById("protected-url")
+        if (urlField.value =='undefined' || urlField.value.trim() == '') {
+            url = 'api/resource';
+        } else {
+            url = urlField.value;
+        }
+
         var req = new XMLHttpRequest();
         req.open('GET', url, true);
         req.setRequestHeader('Accept', 'application/json');
@@ -324,7 +331,8 @@
             //silentCheckSsoRedirectUri: newURL + '/silent-check-sso.html',
             //checkLoginIframe: true,
             checkLoginIframe: false,
-            enableLogging: true
+            enableLogging: true,
+            useNonce: true
         };
 
         keycloak.init(initOptions).then(function (authenticated) {

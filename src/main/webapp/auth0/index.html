@@ -1,0 +1,140 @@
+<!--
+  ~ Copyright 2016 Red Hat, Inc. and/or its affiliates
+  ~ and other contributors as indicated by the @author tags.
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~ http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<html>
+<head>
+    <!--<script src="https://cdn.auth0.com/js/auth0-spa-js/1.12/auth0-spa-js.production.js"></script>-->
+    <script src="/oidc-cmj-web/script/auth0-spa-js.development.js"></script>
+</head>
+<body>
+<h2>Auth0</h2>
+<div>
+    <button id="login">Login</button>
+    <button onclick="keycloak.login({scope: 'offline_access'})">Login for offline</button>
+    <button onclick="keycloak.login({ prompt: 'none'})">Login no prompt</button>
+    <button onclick="keycloak.login({ action: 'UPDATE_PASSWORD' })">Update Password</button>
+    <button onclick="keycloak.logout()">Logout</button>
+    <button onclick="keycloak.register()">Register</button>
+    <button onclick="keycloak.accountManagement()">Account</button>
+    <button onclick="openSignInWindow('http://ya.ru', 'w1')">Popup</button>
+    <button onclick="refreshToken(9999)">Refresh Token</button>
+    <button onclick="refreshToken(30)">Refresh Token (if <30s validity)</button>
+    <button onclick="loadProfile()">Get Profile</button>
+    <button onclick="updateProfile()">Update profile</button>
+    <button onclick="loadUserInfo()">Get User Info</button>
+    <button onclick="output(keycloak.tokenParsed)">Show Token</button>
+    <button onclick="output(keycloak.refreshTokenParsed)">Show Refresh Token</button>
+    <button onclick="output(keycloak.idTokenParsed)">Show ID Token</button>
+    <button onclick="showExpires()">Show Expires</button>
+    <button onclick="output(keycloak)">Show Details</button>
+    <button onclick="output(keycloak.createLoginUrl())">Show Login URL</button>
+    <button onclick="output(keycloak.createLogoutUrl())">Show Logout URL</button>
+    <button onclick="output(keycloak.createRegisterUrl())">Show Register URL</button>
+    <button onclick="output(keycloak.createAccountUrl())">Show Account URL</button>
+    <button onclick="showOpenidConfiguration()">Show OIDC Configuration</button>
+    <button id="callApi">Protected resource</button>
+    <br/>
+    <input type="text"/>
+</div>
+
+<h2>Result</h2>
+<pre style="background-color: #ddd; border: 1px solid #ccc; padding: 10px; word-wrap: break-word; white-space: pre-wrap;"
+     id="output"></pre>
+
+<h2>Events</h2>
+<pre style="background-color: #ddd; border: 1px solid #ccc; padding: 10px; word-wrap: break-word; white-space: pre-wrap;"
+     id="events"></pre>
+
+
+<script>
+    function output(data) {
+        if (typeof data === 'object') {
+            data = JSON.stringify(data, null, '  ');
+        }
+        document.getElementById('output').innerHTML = data;
+    }
+
+    function event(event) {
+        var e = document.getElementById('events').innerHTML;
+        document.getElementById('events').innerHTML = new Date().toLocaleString() + "\t" + event + "\n" + e;
+    }
+
+    var isSendToken = true;
+
+    function protectedResource() {
+        var url = 'api/resource';
+        var req = new XMLHttpRequest();
+        req.open('GET', url, true);
+        req.setRequestHeader('Accept', 'application/json');
+        req.setRequestHeader('Content-Type', 'application/json');
+        if (isSendToken && typeof keycloak.token != 'undefined') {
+            var t = keycloak.token.toString();
+            req.setRequestHeader('Authorization', 'Bearer ' + t);
+        }
+        req.setRequestHeader('Cache-Control', 'no-cache');
+
+        req.onreadystatechange = function () {
+            if (req.readyState == 4) {
+                if (req.status == 200) {
+                    isSendToken = false;
+                    output(req.response)
+                } else if (req.status == 401 && req.getResponseHeader("WWW-Authenticate").substring(0, 6) == 'Bearer') {
+                    isSendToken = true;
+                    //keycloak.login();
+                } else {
+                    isSendToken = true;
+                    output('Failed');
+                }
+            }
+        }
+        req.send();
+    }
+/* =========================================================================== */
+    /*import createAuth0Client from '/oidc-cmj-web/script/auth0-spa-js.development';*/
+    var auth0;
+    createAuth0Client({
+        domain: 'https://localhost:8443/auth/realms/Demo',
+        client_id: 'cmj-web'
+    }).then(it => auth0 = it);
+
+    document.getElementById('login').addEventListener('click', async () => {
+        await auth0.loginWithRedirect({
+            redirect_uri: 'http://localhost:3000/',
+            audience: 'http://localhost:8082/oidc-cmj-web/api'
+        });
+        //logged in. you can get the user profile like this:
+        const user = await auth0.getUser();
+        console.log(user);
+        output(user);
+    });
+
+    document.getElementById('callApi').addEventListener('click', async () => {
+        const accessToken = await auth0.getTokenSilently();
+        const result = await fetch('api/resource', {
+            method: 'GET',
+            headers: {
+                Authorization: 'Bearer ' + accessToken
+            }
+        });
+        const data = await result.json();
+        console.log(data);
+    });
+
+
+</script>
+</body>
+</html>

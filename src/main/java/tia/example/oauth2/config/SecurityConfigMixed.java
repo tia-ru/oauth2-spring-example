@@ -10,6 +10,7 @@ import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -78,6 +79,9 @@ public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
 
     @Value("${spring.security.oauth2.resourceserver.opaque-token.introspection.authentication.method:basic}")
     IntrospectionAuthenticationMethod introspectionAuthenticationMethod;
+
+    @Value("${cmj.claim.user-name:preferred_username}")
+    protected String userNameClaim;
     private OIDCProviderMetadata oidcMetadata = null;
 
    /* public SecurityConfigJwt(){
@@ -110,6 +114,7 @@ public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
                 .withUser("user23").password("").roles("USER").and()
                 .withUser("user24").password("").roles("USER").and()
                 .withUser("hnelson").password("").roles("USER").and()
+                .withUser("18b71e47-e700-4e33-8cd7-b5cff621a28c").password("").roles("USER").and()
                 .withUser("admin").password("password").roles("USER", "ADMIN");
 
     }
@@ -117,10 +122,11 @@ public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
     @Override
     protected void configure(HttpSecurity http) throws Exception {
         http
+            //.requestMatcher(new NegatedRequestMatcher(new AntPathRequestMatcher("/api/ping")))
             .authorizeRequests(authorize -> authorize
                     //.mvcMatchers("/api/**").hasAuthority("SCOPE_message:read")
-                    .anyRequest()
-                    .authenticated()
+                    .antMatchers("/api/ping").permitAll()
+                    .anyRequest().authenticated()
             )
             .sessionManagement();
 
@@ -131,7 +137,7 @@ public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
                     .jwt(jwt -> jwt
                         // Позволяет стартовать приложение без предварительного запуска сервера аутентификации
                         //.jwkSetUri(getJWKSetURI())
-                        .jwtAuthenticationConverter(new CmjJwtAuthenticationConverter(userDetailsService()))
+                        .jwtAuthenticationConverter(new CmjJwtAuthenticationConverter(userDetailsService(), userNameClaim))
                         .decoder(getJwtDecoder())
                     )
             );
@@ -153,7 +159,18 @@ public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
             http.authenticationProvider(chAuthenticationProvider()).addFilter(chRequestHeaderAuthenticationFilter());
         }
         if (enabledAuthNProviders.contains(AuthNProviders.basic)) {
-            http.httpBasic(b -> b.authenticationEntryPoint(getBasicEntryPoint()));
+            http.httpBasic(b -> b
+                    .authenticationEntryPoint(getBasicEntryPoint())
+                    /*.withObjectPostProcessor(new ObjectPostProcessor<BasicAuthenticationFilter>() {
+                        @Override
+                        public BasicAuthenticationFilter postProcess(BasicAuthenticationFilter object) {
+                            //AuthenticationManager authenticationManager = http.getSharedObject(AuthenticationManager.class);
+                            BasicAuthenticationFilter basicAuthenticationFilter = new BasicAuthenticationFilter(authenticationManagerBean(), getBasicEntryPoint());
+                            return basicAuthenticationFilter;
+                        }
+                    })*/
+
+            );
         }
 
     }
@@ -229,14 +246,6 @@ public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
         return provider;
     }
 
-    private JwtDecoder getJwtDecoder() {
-        //В отличие от JwtDecoders.fromOidcIssuerLocation() данная конфигурация не требует работающего IDP на момент старта CMJ
-        NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withJwkSetUri(getJWKSetURI()).build();
-        OAuth2TokenValidator<Jwt> jwtValidator = JwtValidators.createDefaultWithIssuer(issuerUri);
-        jwtDecoder.setJwtValidator(jwtValidator);
-        return jwtDecoder;
-    }
-
     private Optional<OIDCProviderMetadata> getOidcMeta() {
         if (oidcMetadata == null && useOidcProviderMeta && !issuerUri.isEmpty()) {
             try {
@@ -256,6 +265,14 @@ public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
         return jwkSetUri;
     }
 
+    private JwtDecoder getJwtDecoder() {
+        //В отличие от JwtDecoders.fromOidcIssuerLocation() данная конфигурация не требует работающего IDP на момент старта CMJ
+        NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withJwkSetUri(getJWKSetURI()).build();
+        OAuth2TokenValidator<Jwt> jwtValidator = JwtValidators.createDefaultWithIssuer(issuerUri);
+        jwtDecoder.setJwtValidator(jwtValidator);
+        return jwtDecoder;
+    }
+
     private String getIntrospectionUri(){
         if (introspectionUri.isEmpty()) {
             introspectionUri = getOidcMeta().map(m -> m.getIntrospectionEndpointURI().toASCIIString()).orElse("");
@@ -265,5 +282,15 @@ public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
             ).orElse("");*/
         }
         return introspectionUri;
+    }
+
+    @Bean
+    @Override
+    public AuthenticationManager authenticationManagerBean() {
+        try {
+            return super.authenticationManagerBean();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }

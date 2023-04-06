@@ -32,12 +32,14 @@ import org.springframework.util.Assert;
  */
 public class CmjJwtAuthenticationConverter implements Converter<Jwt, AbstractOAuth2TokenAuthenticationToken> {
 
+    private final String userNameClaim;
     private Converter<Jwt, Collection<GrantedAuthority>> jwtGrantedAuthoritiesConverter
             = new JwtGrantedAuthoritiesConverter();
 
     private final UserDetailsService userDetailsService;
 
-    public CmjJwtAuthenticationConverter(@NonNull UserDetailsService userDetailsService) {
+    public CmjJwtAuthenticationConverter(@NonNull UserDetailsService userDetailsService, String userNameClaim) {
+        this.userNameClaim = userNameClaim;
         Assert.notNull(userDetailsService, "userDetailsService cannot be null");
         this.userDetailsService = userDetailsService;
     }
@@ -70,7 +72,7 @@ public class CmjJwtAuthenticationConverter implements Converter<Jwt, AbstractOAu
     protected AbstractOAuth2TokenAuthenticationToken onFirstLogin(Jwt jwt) {
 
         // TODO use jwt.getSubject()
-        String userId = jwt.getClaimAsString(StandardClaimNames.PREFERRED_USERNAME);
+        String userId = jwt.getClaimAsString(userNameClaim);
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(userId);
         Boolean isVerified = jwt.getClaimAsBoolean(StandardClaimNames.EMAIL_VERIFIED);
