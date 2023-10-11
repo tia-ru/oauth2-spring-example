@@ -1,9 +1,5 @@
 package tia.example.oauth2.security;
 
-import java.time.Instant;
-import java.util.Collection;
-import java.util.function.BiFunction;
-
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.AuthenticationServiceException;
@@ -21,6 +17,11 @@ import org.springframework.security.oauth2.server.resource.introspection.BadOpaq
 import org.springframework.security.oauth2.server.resource.introspection.OAuth2IntrospectionException;
 import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
 import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
+
+import java.time.Instant;
+import java.util.Collection;
+import java.util.function.BiFunction;
 
 import static org.springframework.security.oauth2.server.resource.introspection.OAuth2IntrospectionClaimNames.EXPIRES_AT;
 import static org.springframework.security.oauth2.server.resource.introspection.OAuth2IntrospectionClaimNames.ISSUED_AT;
@@ -50,7 +51,7 @@ import static org.springframework.security.oauth2.server.resource.introspection.
 public final class CmjOpaqueTokenAuthenticationProvider implements AuthenticationProvider {
     private final boolean useStoredAuthentication;
     private OpaqueTokenIntrospector introspector;
-    private BiFunction<OAuth2AuthenticatedPrincipal, String, AbstractOAuth2TokenAuthenticationToken<? extends AbstractOAuth2Token>> authenticationConverter = new DefaultAuthenticationConverter();
+    private BiFunction<OAuth2AuthenticatedPrincipal, String, AbstractOAuth2TokenAuthenticationToken<? extends AbstractOAuth2Token>> authenticationConverter;
 
     /**
      * Creates a {@code OpaqueTokenAuthenticationProvider} with the provided parameters
@@ -58,12 +59,13 @@ public final class CmjOpaqueTokenAuthenticationProvider implements Authenticatio
      * @param introspector The {@link OpaqueTokenIntrospector} to use
      */
     public CmjOpaqueTokenAuthenticationProvider(OpaqueTokenIntrospector introspector) {
-        this(introspector, true);
+        this(introspector, "sub", true);
     }
-    public CmjOpaqueTokenAuthenticationProvider(OpaqueTokenIntrospector introspector, boolean useStoredAuthentication) {
+    public CmjOpaqueTokenAuthenticationProvider(OpaqueTokenIntrospector introspector, String userNameClaim, boolean useStoredAuthentication) {
         Assert.notNull(introspector, "introspector cannot be null");
         this.useStoredAuthentication = useStoredAuthentication;
         this.introspector = introspector;
+        this.authenticationConverter = new DefaultAuthenticationConverter(userNameClaim);
     }
 
     /**
@@ -144,6 +146,11 @@ public final class CmjOpaqueTokenAuthenticationProvider implements Authenticatio
     }
 
     static class DefaultAuthenticationConverter implements BiFunction<OAuth2AuthenticatedPrincipal, String, AbstractOAuth2TokenAuthenticationToken<?>> {
+        final String userNameClaim;
+        DefaultAuthenticationConverter(String userNameClaim) {
+
+            this.userNameClaim = userNameClaim;
+        }
         @Override
         public AbstractOAuth2TokenAuthenticationToken<? extends AbstractOAuth2Token> apply(OAuth2AuthenticatedPrincipal principal, String token) {
             Instant iat = principal.getAttribute(ISSUED_AT);
@@ -158,9 +165,17 @@ public final class CmjOpaqueTokenAuthenticationProvider implements Authenticatio
                 exp = iat.plusSeconds(sessionMaxAge);
             }
 
+            String userName = null;
+            if (StringUtils.hasText(userNameClaim)) {
+                userName = principal.getAttribute(userNameClaim);
+            }
+            if (!StringUtils.hasText(userName)) {
+                userName = principal.getName();
+            }
+
             OAuth2AccessToken accessToken = new OAuth2AccessToken(OAuth2AccessToken.TokenType.BEARER, token, iat, exp);
             //TODO
-            CmUserDetailsLTPA ltpa = new CmUserDetailsLTPA(principal.getName(), principal.getName(), null, principal.getAttributes(), principal.getAuthorities());
+            CmUserDetailsLTPA ltpa = new CmUserDetailsLTPA(userName, principal.getName(), null, principal.getAttributes(), principal.getAuthorities());
             AbstractOAuth2TokenAuthenticationToken<? extends AbstractOAuth2Token> t = new CmjBearerTokenAuthentication(ltpa, accessToken);
             return new CmjBearerTokenAuthentication(ltpa, accessToken);
         }

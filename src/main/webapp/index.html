@@ -76,6 +76,7 @@
     function saveConfig() {
         try {
             var cfg = document.getElementById("kc_cfg").value;
+            localStorage.setItem("kc_cfg", cfg);
             var parse = JSON.parse(cfg);
             //parse.url = parse["auth-server-url"];
             //parse.clientId = parse.resource;
@@ -84,7 +85,6 @@
 
             document.getElementById("main").hidden = true;
             setupKC(keycloak);
-            localStorage.setItem("kc_cfg", cfg);
             event("Config is saved")
         } catch (e) {
             output('Init Error: ' + e);
@@ -325,15 +325,20 @@
         var initOptions = {
             responseMode: 'fragment',
             flow: 'standard',
+            //flow: 'implicit',
             pkceMethod: 'S256',
             //onLoad: 'check-sso',
             //onLoad: 'login-required',
             //silentCheckSsoRedirectUri: newURL + '/silent-check-sso.html',
-            //checkLoginIframe: true,
-            checkLoginIframe: false,
+            checkLoginIframe: true,
+            //checkLoginIframe: false,
             enableLogging: true,
-            useNonce: true
+            useNonce: true,
+            // credentials: {
+            //     "secret": "yPpYRNo7ukDqgE3Z4FAP1uLZbEaKGmhh"
+            // }
         };
+
 
         keycloak.init(initOptions).then(function (authenticated) {
             output('Init Success (' + (authenticated ? 'Authenticated' : 'Not Authenticated') + ')');
@@ -375,8 +380,8 @@
         var cfg = localStorage.getItem("kc_cfg");
         var parse = JSON.parse(cfg);
         document.getElementById("kc_cfg").value = cfg;
-        //parse.url = parse["auth-server-url"];
-        //parse.clientId = parse.resource;
+//        parse.url = parse["auth-server-url"];
+//        parse.clientId = parse.resource;
         keycloak = new Keycloak(parse);
     }
 

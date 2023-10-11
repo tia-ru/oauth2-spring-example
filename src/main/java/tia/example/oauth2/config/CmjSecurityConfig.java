@@ -1,9 +1,5 @@
 package tia.example.oauth2.config;
 
-import java.io.IOException;
-import java.util.Optional;
-import java.util.Set;
-
 import com.nimbusds.oauth2.sdk.GeneralException;
 import com.nimbusds.oauth2.sdk.id.Issuer;
 import com.nimbusds.openid.connect.sdk.op.OIDCProviderMetadata;
@@ -37,13 +33,17 @@ import org.springframework.web.client.RestTemplate;
 import tia.example.oauth2.security.AuthNProviders;
 import tia.example.oauth2.security.CmjJwtAuthenticationConverter;
 import tia.example.oauth2.security.CmjOpaqueTokenAuthenticationProvider;
-import tia.example.oauth2.security.IntrospectionAuthenticationMethod;
+import tia.example.oauth2.security.IntrospectionAuthorizationGrantType;
 import tia.example.oauth2.security.SessionAwareBearerTokenResolver;
 import tia.example.oauth2.security.UserAccessTokenAuthenticationEntityConverter;
 import tia.example.oauth2.security.UserInfoOpaqueTokenIntrospector;
 
+import java.io.IOException;
+import java.util.Optional;
+import java.util.Set;
+
 @EnableWebSecurity(debug = true)
-public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
+public class CmjSecurityConfig extends WebSecurityConfigurerAdapter {
 
     // jwt,opaque,basic,header
     @Value("${authNProviders:jwt, basic}")
@@ -77,13 +77,23 @@ public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
     @Value("${spring.security.oauth2.resourceserver.opaque-token.use-user-info:false}")
     boolean useUserInfoEndpoint;
 
-    @Value("${spring.security.oauth2.resourceserver.opaque-token.introspection.authentication.method:basic}")
-    IntrospectionAuthenticationMethod introspectionAuthenticationMethod;
+    @Value("${cmj.opaque-token.introspection.authentication.method:basic}")
+    String introspectionAuthenticationMethod;
 
     @Value("${cmj.claim.user-name:preferred_username}")
     protected String userNameClaim;
-    private OIDCProviderMetadata oidcMetadata = null;
 
+    //'client_credentials', 'password' or 'refresh_token'
+    @Value("${cmj.opaque-token.introspection.authorization.grant.type:client_credentials}")
+    String authorizationGrantType;
+
+    @Value("${cmj.claim.scopes:oidc,profile}")
+    String scopes;
+
+    @Value("${cmj.opaque-token.introspection.userinfo-uri:}")
+    String userInfoUri;
+
+    private OIDCProviderMetadata oidcMetadata = null;
    /* public SecurityConfigJwt(){
         super(true);
     }*/
@@ -151,7 +161,7 @@ public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
                     //.bearerTokenResolver(new SessionAwareBearerTokenResolver())
                     .opaqueToken(o -> o
                         .authenticationManager(new ProviderManager(
-                                new CmjOpaqueTokenAuthenticationProvider(introspector())))
+                                new CmjOpaqueTokenAuthenticationProvider(introspector(), userNameClaim, true)))
                     )
                 );
         }
@@ -177,24 +187,39 @@ public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
     @Bean
     OpaqueTokenIntrospector introspector() {
         OpaqueTokenIntrospector introspector;
-        if (introspectionAuthenticationMethod == IntrospectionAuthenticationMethod.user_access_token) {
+        ClientRegistration clientRegistration = clientRegistration();
+
+        ///////
+        //AuthorizationGrantType.CLIENT_CREDENTIALS.equals(clientRegistration.getAuthorizationGrantType())
+
+        if (IntrospectionAuthorizationGrantType.USER_ACCESS_TOKEN.equals(clientRegistration.getAuthorizationGrantType())) {
+            RestTemplate restTemplate = new RestTemplate();
+            //FAM
+            NimbusOpaqueTokenIntrospector nimbusIntrospector = new NimbusOpaqueTokenIntrospector(getIntrospectionUri(), restTemplate);
+            nimbusIntrospector.setRequestEntityConverter(new UserAccessTokenAuthenticationEntityConverter(getIntrospectionUri()));
+            introspector = nimbusIntrospector;
+        } else {
+            introspector = new NimbusOpaqueTokenIntrospector(getIntrospectionUri(), clientId, clientSecret);
+        }
+        ///////
+
+        /*if (introspectionAuthenticationMethod == IntrospectionAuthenticationMethod.user_access_token) {
             //FAM
             NimbusOpaqueTokenIntrospector nimbusIntrospector = new NimbusOpaqueTokenIntrospector(getIntrospectionUri(), new RestTemplate());
             nimbusIntrospector.setRequestEntityConverter(new UserAccessTokenAuthenticationEntityConverter(getIntrospectionUri()));
             introspector = nimbusIntrospector;
         } else {
             introspector = new NimbusOpaqueTokenIntrospector(getIntrospectionUri(), clientId, clientSecret);
-        }
+        }*/
 
         if (useUserInfoEndpoint) {
-            ClientRegistration clientRegistration = clientRegistration();
             introspector = new UserInfoOpaqueTokenIntrospector(introspector, clientRegistration);
         }
         return introspector;
     }
 
     ClientRegistration clientRegistration() {
-        ClientRegistration clientRegistration = null;
+        /*ClientRegistration clientRegistration = null;
         if (useOidcProviderMeta && !issuerUri.isEmpty()) {
             clientRegistration = ClientRegistrations.fromIssuerLocation(issuerUri)
                     .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
@@ -207,7 +232,7 @@ public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
         }
         if (clientRegistration == null) {
             // TODO Сделать свойства для всех значений ниже
-            clientRegistration = ClientRegistration.withRegistrationId("idp")
+            clientRegistration = ClientRegistration.withRegistrationId(clientId)
                     .clientId(clientId)
                     .clientSecret(clientSecret)
                     .clientAuthenticationMethod(ClientAuthenticationMethod.BASIC)
@@ -218,7 +243,68 @@ public class SecurityConfigMixed extends WebSecurityConfigurerAdapter {
                     .tokenUri("")
                     .build();
         }
+        return clientRegistration;*/
+
+        AuthorizationGrantType authzGrantType = getAuthorizationGrantType();
+        ClientAuthenticationMethod method = getClientAuthenticationMethod();
+
+        ClientRegistration clientRegistration = null;
+
+        if (useOidcProviderMeta && !issuerUri.isEmpty()) {
+            clientRegistration = ClientRegistrations.fromIssuerLocation(issuerUri)
+                    .authorizationGrantType(authzGrantType)
+                    .clientAuthenticationMethod(method)
+                    .clientId(clientId)
+                    .clientSecret(clientSecret)
+                    .userNameAttributeName(userNameClaim)
+                    .scope(scopes.trim().split("[,\\s]+"))
+                    .build();
+        }
+
+
+        if (clientRegistration == null) {
+
+            if (useUserInfoEndpoint && userInfoUri.isEmpty()) {
+                throw new IllegalArgumentException("'cmj.opaque-token.introspection.userinfo-uri' property is required");
+            }
+
+            clientRegistration = ClientRegistration.withRegistrationId(clientId)
+                    .clientId(clientId)
+                    .clientSecret(clientSecret)
+                    .authorizationGrantType(authzGrantType)
+                    .clientAuthenticationMethod(method)
+                    .jwkSetUri(getJWKSetURI())
+                    .userInfoUri(userInfoUri)
+                    .userInfoAuthenticationMethod(AuthenticationMethod.HEADER)
+                    .userNameAttributeName(userNameClaim)
+                    .tokenUri(getIntrospectionUri())
+                    .scope(scopes.trim().split("[,\\s]+"))
+                    .build();
+        }
         return clientRegistration;
+    }
+
+    private ClientAuthenticationMethod getClientAuthenticationMethod() {
+        ClientAuthenticationMethod method = new ClientAuthenticationMethod(introspectionAuthenticationMethod.trim().toLowerCase());
+        if (!method.equals(ClientAuthenticationMethod.BASIC)
+                && !method.equals(ClientAuthenticationMethod.POST)
+                && !method.equals(ClientAuthenticationMethod.NONE)) {
+            throw new IllegalArgumentException("Only 'basic', 'post' and 'none' "
+                    + "values are supported for 'cmj.opaque-token.introspection.authentication.method' property.");
+        }
+        return method;
+    }
+
+    private AuthorizationGrantType getAuthorizationGrantType() {
+        AuthorizationGrantType authzGrantType = new AuthorizationGrantType(authorizationGrantType.trim().toLowerCase());
+        if (!AuthorizationGrantType.CLIENT_CREDENTIALS.equals(authzGrantType)
+                && !IntrospectionAuthorizationGrantType.USER_ACCESS_TOKEN.equals(authzGrantType)){
+            throw new IllegalArgumentException("Only '"
+                    + AuthorizationGrantType.CLIENT_CREDENTIALS.getValue()  + "', '"
+                    + IntrospectionAuthorizationGrantType.USER_ACCESS_TOKEN.getValue()
+                    + "' for 'cmj.opaque-token.introspection.authorization.grant.type' property are supported.");
+        }
+        return authzGrantType;
     }
 
     private CmBasicAuthenticationEntryPoint getBasicEntryPoint() {
