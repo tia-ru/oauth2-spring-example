@@ -21,6 +21,7 @@
 
         <!--<spring.security.version>4.0.4.RELEASE</spring.security.version>-->
         <spring.security.version>5.3.10.RELEASE</spring.security.version>
+        <!--<spring.security.version>6.5.6</spring.security.version>-->
         <tomcat.version>9.0.37</tomcat.version>
     </properties>
     <dependencyManagement>
@@ -67,6 +68,11 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-oauth2-client</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-aspects</artifactId>
         </dependency>
 
         <dependency>
@@ -119,6 +125,18 @@
             <version>4.13.2</version>
             <scope>test</scope>
         </dependency>
+        <!-- JOOQ -->
+<!--        <dependency>
+            <groupId>org.jooq</groupId>
+            <artifactId>jooq</artifactId>
+            <version>3.19.3</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jooq</groupId>
+            <artifactId>jooq-postgres-extensions</artifactId>
+            <version>3.19.3</version>
+        </dependency>-->
+
 
     </dependencies>
 

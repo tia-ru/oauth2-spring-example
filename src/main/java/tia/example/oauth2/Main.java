@@ -1,5 +1,16 @@
 package tia.example.oauth2;
 
+import org.apache.catalina.Context;
+import org.apache.catalina.WebResourceRoot;
+import org.apache.catalina.WebResourceSet;
+import org.apache.catalina.connector.Connector;
+import org.apache.catalina.startup.Tomcat;
+import org.apache.catalina.webresources.DirResourceSet;
+import org.apache.catalina.webresources.JarResourceSet;
+import org.apache.catalina.webresources.StandardRoot;
+import org.apache.tomcat.util.net.SSLHostConfig;
+import org.apache.tomcat.util.net.SSLHostConfigCertificate;
+
 import java.io.File;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -12,14 +23,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
-import org.apache.catalina.Context;
-import org.apache.catalina.WebResourceRoot;
-import org.apache.catalina.WebResourceSet;
-import org.apache.catalina.startup.Tomcat;
-import org.apache.catalina.webresources.DirResourceSet;
-import org.apache.catalina.webresources.JarResourceSet;
-import org.apache.catalina.webresources.StandardRoot;
-
 public class Main {
 
     private static final String WEBAPP_DIR_LOCATION = "src/main/webapp/";
@@ -27,7 +30,7 @@ public class Main {
     public static final String DEFAULT_PORT = "8082";
 
     public static void main(String[] args) throws Exception {
-        
+
         Logger logger = Logger.getLogger("");
         //logger.setLevel(Level.FINE);
 
@@ -46,7 +49,8 @@ public class Main {
         //The port that we should run on can be set into an environment variable
         //Look for that variable and default to 8081 if it isn't there.
         String webPort = Optional.ofNullable(System.getenv("PORT")).orElse(DEFAULT_PORT);
-        tomcat.setPort(Integer.parseInt(webPort));
+        int httpPort = Integer.parseInt(webPort);
+        tomcat.setPort(httpPort);
         //ctx.setAddWebinfClassesResources(true); // process /META-INF/resources for static
 
         // Declare an alternative location for your "WEB-INF/classes" dir
@@ -108,6 +112,7 @@ public class Main {
         //tomcat.initWebappDefaults(ctx);
 
         tomcat.getConnector(); // Start http listener. Having to call this looks like a bug
+        //tomcat.setConnector(createSslConnector(httpPort - 8080 + 8443));
         tomcat.start();
         tomcat.getServer().await();
         tempPath.toFile().delete();
@@ -128,5 +133,27 @@ public class Main {
         } catch (URISyntaxException ex) {
             throw new RuntimeException(ex);
         }
+    }
+
+    private static Connector createSslConnector(int port){
+        Connector httpsConnector = new Connector();
+        httpsConnector.setPort(port);
+        httpsConnector.setSecure(true);
+        httpsConnector.setScheme("https");
+        httpsConnector.setAttribute("SSLEnabled", "true");
+
+        SSLHostConfig sslConfig = new SSLHostConfig();
+
+        SSLHostConfigCertificate certConfig = new SSLHostConfigCertificate(sslConfig, SSLHostConfigCertificate.Type.RSA);
+        certConfig.setCertificateKeystoreFile("/root/.keystore");
+        certConfig.setCertificateKeystorePassword("changeit");
+        certConfig.setCertificateKeyAlias("mykeyalias");
+
+        sslConfig.addCertificate(certConfig);
+
+
+        httpsConnector.addSslHostConfig(sslConfig);
+
+        return httpsConnector;
     }
 }

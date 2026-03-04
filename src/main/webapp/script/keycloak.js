@@ -1134,10 +1134,13 @@
 
 	    kc.createLogoutUrl = function(options) {
 	        var url = kc.endpoints.logout()
-	            + '?redirect_uri=' + encodeURIComponent(adapter.redirectUri(options, false));
+                + '?client_id=' + encodeURIComponent(kc.clientId)
+                + '&post_logout_redirect_uri=' + encodeURIComponent(adapter.redirectUri(options, false)) //KC>=18
+			    //+ '&redirect_uri=' + encodeURIComponent(adapter.redirectUri(options, false)) //KC<18
+			;
 // TIA ==========
 	        if (kc.idToken) {
-			    url = url + "&id_token_hint=" + encodeURIComponent(kc.idToken)
+			   // url = url + "&id_token_hint=" + encodeURIComponent(kc.idToken)
 		 	}
 // TIA ==========
 	        return url;
@@ -1619,7 +1622,7 @@
 	        return xhr.status == 0 && xhr.responseText && xhr.responseURL.startsWith('file:');
 	    }
 
-	    function setToken(token, refreshToken, idToken, timeLocal) {
+		function setToken(token, refreshToken, idToken, timeLocal) {
 	        if (kc.tokenTimeoutHandle) {
 	            clearTimeout(kc.tokenTimeoutHandle);
 	            kc.tokenTimeoutHandle = null;

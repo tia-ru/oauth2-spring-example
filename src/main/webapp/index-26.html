@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Keycloak Single-Page Application Example</title>
+    <script type="importmap">
+        {
+          "imports": {
+            "keycloak-js": "/oidc-cmj-web/script/keycloak-26.js"
+          }
+        }
+    </script>
+    <link rel="modulepreload" href="/oidc-cmj-web/script/keycloak-26.js">
+</head>
+<body>
+<div id="main" hidden="true">
+    <div id="user">
+        <button id="login" type="button">Login</button>
+        <button id="logout" type="button">Logout</button>
+        <button id="showMyAccount" type="button">My Account</button>
+        <button id="showIdToken" type="button">Show ID Token</button>
+        <button id="showAccessToken" type="button">Show Access Token</button>
+        <button id="refreshToken" type="button">Refresh</button>
+        <hr>
+        <h2 id="name"></h2>
+    </div>
+</div>
+<div id="config">
+    Keycloak config JSON:
+    <textarea id="kc_cfg" rows="6" style="width: 100%"></textarea><br/>
+    <button id="applyConfig">Apply</button>
+</div>
+
+<h2>Result</h2>
+<pre id="output" style="background-color: #ddd; border: 1px solid #ccc; padding: 10px; word-wrap: break-word; white-space: pre-wrap;"></pre>
+
+<h2>Events</h2>
+<pre style="background-color: #ddd; border: 1px solid #ccc; padding: 10px; word-wrap: break-word; white-space: pre-wrap;"
+     id="events"></pre>
+
+<script type="module">
+    import Keycloak from "keycloak-js";
+
+    var keycloak;
+
+    const outputElement = document.getElementById("output");
+    const eventElement = document.getElementById('events');
+    const nameElement = document.getElementById("name");
+    const userElement = document.getElementById("user");
+
+    function output(content) {
+        if (typeof content === "object") {
+            content = JSON.stringify(content, null, 2);
+        }
+
+        outputElement.textContent = content;
+    }
+
+    function event(event) {
+        var e = eventElement.innerHTML;
+        eventElement.innerHTML = new Date().toLocaleString() + "\t" + event + "\n" + e;
+    }
+
+    function showProfile() {
+        const name =
+            keycloak.idTokenParsed.name ||
+            keycloak.idTokenParsed.preferred_username;
+
+        nameElement.textContent = `Hello ${name}`;
+        userElement.style.display = "block";
+    }
+
+    async function initKC(keycloak) {
+        keycloak.onAuthSuccess = function () {
+            event('Auth Success');
+        };
+
+        keycloak.onAuthError = function (errorData) {
+            event("Auth Error: " + JSON.stringify(errorData));
+        };
+
+        keycloak.onAuthRefreshSuccess = function () {
+            event('Auth Refresh Success');
+        };
+
+        keycloak.onAuthRefreshError = function () {
+            event('Auth Refresh Error');
+        };
+
+        keycloak.onAuthLogout = function () {
+            event('Auth Logout');
+        };
+
+        keycloak.onTokenExpired = function () {
+            event('Access token expired.');
+        };
+
+        keycloak.onActionUpdate = function (status) {
+            switch (status) {
+                case 'success':
+                    event('Action completed successfully');
+                    break;
+                case 'cancelled':
+                    event('Action canceled by user');
+                    break;
+                case 'error':
+                    event('Action failed');
+                    break;
+            }
+        };
+
+        var path = window.location.pathname.split('/');
+        path.length = path.length - 1;
+        path = path.join("/")
+        var newURL = window.location.protocol + "//" + window.location.host + path
+        // Flow can be changed to 'implicit' or 'hybrid', but then client must enable implicit flow in admin console too
+        var initOptions = {
+            responseMode: 'fragment',
+            flow: 'standard',
+            //flow: 'implicit',
+            pkceMethod: 'S256',
+            //onLoad: 'check-sso',
+            //onLoad: 'login-required',
+            //silentCheckSsoRedirectUri: newURL + '/silent-check-sso.html',
+            //checkLoginIframe: true,
+            //checkLoginIframe: false,
+            enableLogging: true,
+            useNonce: true
+            // credentials: {
+            //     "secret": "yPpYRNo7ukDqgE3Z4FAP1uLZbEaKGmhh"
+            // }
+        };
+
+        /*await keycloak.init(initOptions).then( (authenticated) => {
+            output('Init Success (' + (authenticated ? 'Authenticated' : 'Not Authenticated') + ')');
+            document.getElementById("main").hidden = false
+        }).catch(function (reason) {
+            if (typeof reason === 'object'){
+                output('Init Error: ' + reason.error);
+            } else {
+                output('Init Error: ' + reason);
+            }
+
+        });*/
+
+        try {
+            let authenticated = await keycloak.init(initOptions);
+            output('Init Success (' + (authenticated ? 'Authenticated' : 'Not Authenticated') + ')');
+            document.getElementById("main").hidden = false //userElement.style.display = "block";
+        } catch (reason) {
+            if (typeof reason === 'object'){
+                output('Init Error: ' + reason.error);
+            } else {
+                output('Init Error: ' + reason);
+            }
+        }
+    }
+
+    async function applyConfig() {
+        try {
+            document.getElementById("main").hidden = true;
+
+            var cfgStr = document.getElementById("kc_cfg").value;
+            var cfg = JSON.parse(cfgStr);
+            keycloak = new Keycloak(cfg);
+            await initKC(keycloak);
+            localStorage.setItem("kc_cfg", cfgStr);
+        } catch (e) {
+            output('Init Error: ' + e);
+        }
+    }
+
+    /* === Init ============================================================================ */
+
+    document
+        .getElementById("login")
+        .addEventListener("click", () => {
+            keycloak.login();
+        });
+
+    document
+        .getElementById("logout")
+        .addEventListener("click", () => {
+        keycloak.logout();
+    });
+
+    document
+        .getElementById("showIdToken")
+        .addEventListener("click", () => {
+        output(keycloak.idTokenParsed);
+    });
+
+    document
+        .getElementById("showAccessToken")
+        .addEventListener("click", () => {
+            output(keycloak.tokenParsed);
+        });
+
+    document
+        .getElementById("refreshToken")
+        .addEventListener("click", async () => {
+            await keycloak.updateToken(-1);
+            output(keycloak.idTokenParsed);
+            showProfile();
+        });
+
+    document
+        .getElementById("showMyAccount")
+        .addEventListener("click", async () => {
+            await keycloak.accountManagement()
+        });
+
+    document
+        .getElementById("applyConfig")
+        .addEventListener("click", async () => {
+            await applyConfig();
+        });
+
+    var cfgStr = localStorage.getItem("kc_cfg");
+    if (null == cfgStr){
+        var cfg = {
+            url: "https://localhost:8443",
+            realm: "Demo",
+            clientId: "cmj-web",
+        };
+        cfgStr = JSON.stringify(cfg, null, '  ');
+    }
+    document.getElementById("kc_cfg").value = cfgStr;
+    await applyConfig();
+    showProfile();
+</script>
+</body>
+</html>

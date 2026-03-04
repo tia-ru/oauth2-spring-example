@@ -1,8 +1,5 @@
 {
   "realm": "Demo",
-  "url": "http://localhost:8082/auth/",
-  "ssl-required": "external",
-  "clientId" : "cmj-web",
-  "public-client": true,
-  "confidential-port": 0
+  "auth-server-url": "https://example.org/auth/",
+  "resource": "clientId"
 }

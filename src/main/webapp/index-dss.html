@@ -54,7 +54,10 @@
         <button onclick="showOpenidConfiguration()">Show OIDC Configuration</button>
     </div>
     <div id="cmj">
-        <button onclick="protectedResource()">Protected resource:</button> <input id="protected-url" type="url">
+        <br/>
+        Protected resource:<input id="protected-url" type="url">
+        <button onclick="protectedResource()">Access</button>
+        <button onclick="exchangeToken()">Exchange token</button>
     </div>
     <br/>
 </div>
@@ -73,6 +76,9 @@
      id="events"></pre>
 
 <script>
+    var keycloak;
+    var dssToken;
+
     function saveConfig() {
         try {
             var cfg = document.getElementById("kc_cfg").value;
@@ -219,7 +225,11 @@
 
         if (isSendToken && typeof keycloak.token === 'string') {
             var t = keycloak.token.toString();
+            if (dssToken) {
+                t = dssToken;
+            }
             req.setRequestHeader('Authorization', 'Bearer ' + t);
+            //req.withCredentials = true;
         }
 
         req.setRequestHeader('Cache-Control', 'no-cache');
@@ -227,7 +237,7 @@
         req.onreadystatechange = function () {
             if (req.readyState == 4) {
                 if (req.status == 200) {
-                    isSendToken = false;
+                    //isSendToken = false;
                     output(req.response)
                 } else if (req.status == 401 && req.getResponseHeader("WWW-Authenticate").substring(0, 6) == 'Bearer') {
                     isSendToken = true;
@@ -332,8 +342,8 @@
             //onLoad: 'check-sso',
             //onLoad: 'login-required',
             //silentCheckSsoRedirectUri: newURL + '/silent-check-sso.html',
-            checkLoginIframe: true,
-            //checkLoginIframe: false,
+            //checkLoginIframe: true,
+            checkLoginIframe: false,
             enableLogging: true,
             useNonce: true,
             // credentials: {
@@ -354,6 +364,80 @@
 
         });
     }
+
+    function base64ToBytes(base64) {
+        const binString = atob(base64);
+        return Uint8Array.from(binString, (m) => m.codePointAt(0));
+    }
+
+    function bytesToBase64(bytes) {
+        const binString = String.fromCodePoint(...bytes);
+        return btoa(binString);
+    }
+    function Base64UrlEncode(partiallyInvalidUTF16String) {
+        return bytesToBase64(new TextEncoder().encode(partiallyInvalidUTF16String));
+    }
+    function Base64UrlDecode(partiallyInvalidUTF16StringEncoded) {
+        return new TextDecoder().decode(base64ToBytes(partiallyInvalidUTF16StringEncoded));
+    }
+
+    function exchangeToken(){
+        const dssBase = "https://dss.inttrust.ru:444/STS/oauth";
+        const dss = {
+            "tokenEndpoint": dssBase + "/token"
+        };
+
+        var req = new XMLHttpRequest();
+        req.open('POST', dss.tokenEndpoint, true);
+        req.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+
+        //req.withCredentials = true;
+        //req.setRequestHeader('Authorization', 'Basic ' + Base64UrlEncode('test-dss'));
+        req.setRequestHeader('Access-Control-Allow-Origin', window.origin);
+
+        var params = 'grant_type=' + encodeURIComponent('urn:ietf:params:oauth:grant-type:token-exchange');
+        params += '&resource=urn%3Acryptopro%3Adss%3Asignserver%3Asignserver';
+        //params += '&actor_token_type=' + encodeURIComponent('urn:ietf:params:oauth:token-type:jwt');
+        //params += '&actor_token=' + keycloak.token.toString() ;
+        params += '&subject_token=' + keycloak.token.toString() ;
+        params += '&subject_token_type=' + encodeURIComponent('urn:ietf:params:oauth:token-type:jwt');
+        params += '&client_id=test-dss';
+
+        var headerJson = {
+            "alg": "none",
+            "typ": "JWT"
+        };
+        var header = JSON.stringify(headerJson);
+
+        let now = Math.ceil(new Date().getTime() / 1000);
+        var payloadJson = {
+            "unique_name": keycloak.tokenParsed.preferred_username,
+            "nbf": now,
+            "exp": now + 600,
+            "iat": now
+        };
+        var payload = JSON.stringify(payloadJson);
+        var subjectToken = Base64UrlEncode(header) + '.' + Base64UrlEncode(payload) + '.';
+        //params += '&subject_token=' + subjectToken;
+
+
+        req.onreadystatechange = function() {
+            if (req.readyState == 4) {
+                if (req.status == 200) {
+
+                    var tokenResponse = JSON.parse(req.responseText);
+                    dssToken = tokenResponse['access_token'];
+                    output(dssToken);
+                    //keycloak.tmp_SetToken(tokenResponse['access_token']);
+                } else {
+                    output('Error status: ' + req.status);
+                }
+            }
+        };
+
+        req.send(params);
+    }
+
     function fillInDefaultConfig() {
         var cfg_elem = document.getElementById("kc_cfg")
         if (cfg_elem.value == 'undefined' || cfg_elem.value.trim() == '') {
